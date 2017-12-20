@@ -72,6 +72,9 @@ public class Translator {
 		ServerConcept response = new ServerConcept();
 		response.setName(r.getName());
 		response.setType(r.getSemanticGroup());
+		
+		// beacons don't yet return taxonomic info... next iteration?
+		// response.setTaxon(r.getTaxon()); 
 		return response;
 	}
 

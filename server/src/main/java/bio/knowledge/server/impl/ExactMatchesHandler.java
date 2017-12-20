@@ -46,6 +46,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import bio.knowledge.Util;
 import bio.knowledge.aggregator.ConceptCliqueService;
 import bio.knowledge.aggregator.ConceptTypeService;
 import bio.knowledge.aggregator.ConceptTypeUtil;
@@ -72,7 +73,7 @@ import bio.knowledge.server.impl.Cache.CacheLocation;
  *  We may have to tweak the Cache behaviour for non-redundant multi-key caching?
  */
 @Service
-public class ExactMatchesHandler implements ConceptTypeUtil {
+public class ExactMatchesHandler implements Util, ConceptTypeUtil {
 	
 	private static Logger _logger = LoggerFactory.getLogger(ExactMatchesHandler.class);
 	
@@ -161,26 +162,40 @@ public class ExactMatchesHandler implements ConceptTypeUtil {
 	/*
 	 * Due diligence saving to avoid Clique duplication in the database
 	 */
-	private ConceptClique archive( ConceptClique clique ) {
+	private ConceptClique archive( ConceptClique theClique ) {
 	
 		/*
 		 *  Sanity check for an existing node in the database
 		 *  with the same accession identifier
 		 */
-		ConceptClique theClique = 
-				conceptCliqueRepository.getConceptCliqueById( clique.getId() );
+		Long theDbId = theClique.getDbId();
 		
-		if( theClique != null ) {
-			// then there is an existing clique in the database.. need to merge it?
-			conceptCliqueService.mergeConceptCliques(theClique,clique);
+		/*
+		 * Check if there is an existing clique 
+		 * with the same clique id in the database...
+		 */		
+		ConceptClique dbClique = 
+				conceptCliqueRepository.getConceptCliqueById( theClique.getId() );
+		
+		/*
+		 * Conservatively, I only need to merge cliques if 
+		 * they are two distinct persisted clique records
+		 */
+		if( dbClique != null ) {
+			conceptCliqueService.mergeConceptCliques( dbClique, theClique );
+			
 		} else {
-			theClique = clique ;
+			// Just save the clique that was handed into you
+			dbClique = theClique ;
 		}
 		
-		// Now save the whichever clique you have, to the database
-		theClique = conceptCliqueRepository.save(theClique);
+		/*
+		 * Now save whichever clique 
+		 * you have, to the database
+		 */
+		dbClique = conceptCliqueRepository.save(dbClique);
 		
-		return theClique;
+		return dbClique;
 	}
 	
 
@@ -258,9 +273,34 @@ public class ExactMatchesHandler implements ConceptTypeUtil {
 		}		
 	}
 	
+	public ConceptClique updateAndRefresh(ConceptClique theClique) {
+		// Update the remote database
+		theClique = archive(theClique) ;
+
+		// putting fetched result into the in-memory cache
+		
+		/*
+		 *  ... cached by every subclique concept id 
+		 *  (may overwrite previously partial cliques cached against an identifier)
+		 */
+		cache.setMultiCachedEntity( "ConceptClique", theClique.getConceptIds(), theClique ) ;
+
+		// .. cached by resulting clique id...
+		CacheLocation cliqueIdCacheLocation = 
+				cache.searchForEntity( "ConceptClique", theClique.getId(), new String[]{ theClique.getId() } );
+
+		cliqueIdCacheLocation.setEntity(theClique);			
+		
+		_logger.debug( "Concept Clique "+theClique.getId()+
+				" archived in the database and cached in memory?");
+		
+		return theClique;
+	}
+	
 	/**
 	 * Builds up concept cliques for each conceptId in {@code c}, and then merges them into a single
 	 * set of conceptIds and returns this set.
+	 * @param string 
 	 * @param conceptIds
 	 * @param sources 
 	 * @return
@@ -275,7 +315,8 @@ public class ExactMatchesHandler implements ConceptTypeUtil {
 			KnowledgeBeaconImpl beacon, 
 			String conceptId, 
 			String conceptName,
-			List<ConceptType> types
+			List<ConceptType> types, 
+			String taxon
 	) {
 
 		final String beaconId = beacon.getId();
@@ -429,28 +470,16 @@ public class ExactMatchesHandler implements ConceptTypeUtil {
 			 */
 			theClique.addConceptId( beacon.getId(), conceptId );
 			
+			/*
+			 * Set the Taxon if not yet known?
+			 */
+			if( theClique.getTaxon().isEmpty() && !nullOrEmpty(taxon) )
+				theClique.setTaxon(taxon);
+			
 			// fresh the id and semantic group, just in case
 			conceptCliqueService.assignAccessionId(theClique); 
 
-			// Update the remote database
-			theClique = archive(theClique) ;
-
-			// putting fetched result into the in-memory cache
-			
-			/*
-			 *  ... cached by every subclique concept id 
-			 *  (may overwrite previously partial cliques cached against an identifier)
-			 */
-			cache.setMultiCachedEntity( "ConceptClique", theClique.getConceptIds(), theClique ) ;
-
-			// .. cached by resulting clique id...
-			CacheLocation cliqueIdCacheLocation = 
-					cache.searchForEntity( "ConceptClique", theClique.getId(), new String[]{ theClique.getId() } );
-
-			cliqueIdCacheLocation.setEntity(theClique);			
-			
-			_logger.debug( "Concept Clique "+theClique.getId()+
-					" archived in the database and cached in memory?");
+			theClique = updateAndRefresh(theClique);
 		}
 
 		return theClique;
@@ -509,7 +538,7 @@ public class ExactMatchesHandler implements ConceptTypeUtil {
 					 * 
 					 */
 					// Only record non-empty subcliques for beacons
-					if(! (beaconMatches==null || beaconMatches.isEmpty() ) ) {
+					if(!nullOrEmpty(beaconMatches) ) {
 						clique.addConceptIds( beacon.getId(), beaconMatches );
 						matches.addAll(beaconMatches);
 					}
@@ -559,5 +588,36 @@ public class ExactMatchesHandler implements ConceptTypeUtil {
 	 */
 	public ConceptClique getConceptClique(String[] identifiers) {
 		return conceptCliqueRepository.getConceptClique(identifiers);
+	}
+
+	public ConceptClique[] splitClique(
+			ConceptClique theClique, 
+			String beaconId, 
+			String conceptId, 
+			String taxon
+	) {
+		// Remove from the given clique 
+		theClique.removeConceptId(beaconId,conceptId);
+		
+		// may have to reassess the primary clique id?
+		conceptCliqueService.assignAccessionId(theClique);
+		
+		// Then update the cache and database
+		updateAndRefresh(theClique);
+		
+		/*
+		 * Create a new clique with the 
+		 * removed concept id as the initial cliqueId
+		 * but with identical concept type assumed
+		 * and specified taxon
+		 */
+		ConceptClique newClique = 
+				new ConceptClique(conceptId,theClique.getConceptType());
+		
+		newClique.setTaxon(taxon);
+		newClique.addConceptId( beaconId, conceptId );
+		newClique = updateAndRefresh(newClique);
+		
+		return new ConceptClique[] { theClique, newClique };
 	}
 }

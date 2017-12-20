@@ -34,6 +34,7 @@ import org.neo4j.ogm.annotation.NodeEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import bio.knowledge.Util;
 import bio.knowledge.model.DomainModelException;
 import bio.knowledge.model.core.neo4j.Neo4jAbstractIdentifiedEntity;
 import bio.knowledge.model.umls.Category;
@@ -51,14 +52,22 @@ import bio.knowledge.model.umls.Category;
  *
  */
 @NodeEntity(label="ConceptClique")
-public class ConceptClique extends Neo4jAbstractIdentifiedEntity {
+public class ConceptClique extends Neo4jAbstractIdentifiedEntity implements Util {
 	
 	private static Logger _logger = LoggerFactory.getLogger(ConceptClique.class);
 	
 	// delimiter of conceptIds in beacon subcliques
 	private static final String QDELIMITER = ";";
 	
+	/* Translator concept semantic data type
+	 * Could be a UMLS Semantic Group, e.g. umls_sg:GENE
+	 * or some other more comprehensive
+	 * Translator data type ontology term.
+	 */
 	private String conceptType = Category.DEFAULT_SEMANTIC_GROUP ;
+
+	/* NCBI Taxon Identifier */
+	private String taxon = "" ;
 
 	/**
 	 * 
@@ -71,6 +80,31 @@ public class ConceptClique extends Neo4jAbstractIdentifiedEntity {
 	 */
 	public ConceptClique(String conceptType) {
 		this.conceptType = conceptType;
+	}
+	
+	/**
+	 * 
+	 * @param conceptType
+	 */
+	public ConceptClique(String cliqueId, String conceptType) {
+		super(cliqueId,cliqueId,cliqueId+" Clique of type "+conceptType);
+		this.conceptType = conceptType;
+	}
+	
+	/**
+	 * 
+	 * @param primary taxon associated with the Clique
+	 */
+	public void setTaxon(String taxon) {
+		this.taxon = taxon;
+	}
+	
+	/**
+	 * 
+	 * @return primary taxon associated with the Clique
+	 */
+	public String getTaxon() {
+		return taxon;
 	}
 	
 	/**
@@ -115,7 +149,7 @@ public class ConceptClique extends Neo4jAbstractIdentifiedEntity {
 	@Override
 	public String getName() {
 		String name = super.getName();
-		if(name==null || name.isEmpty())
+		if( nullOrEmpty(name))
 			return getId();
 		return super.getName();
 	}
@@ -128,7 +162,7 @@ public class ConceptClique extends Neo4jAbstractIdentifiedEntity {
 	 */
 	public void addConceptIds( String beaconId, List<String> subclique ) {
 		
-		if( beaconId==null || beaconId.isEmpty() ) 
+		if( nullOrEmpty(beaconId) ) 
 			throw new DomainModelException("ConceptClique() ERROR: null or empty beacon id?");
 		
 		for(String id : subclique ) {
@@ -149,7 +183,7 @@ public class ConceptClique extends Neo4jAbstractIdentifiedEntity {
 	 */
 	public void addConceptId( String beaconId, String conceptId ) {
 		
-		if( beaconId==null || beaconId.isEmpty() ) 
+		if( nullOrEmpty(beaconId) ) 
 			throw new DomainModelException("ConceptClique() ERROR: null or empty beacon id?");
 		
 		if(!conceptIds.contains(conceptId)) {
@@ -158,6 +192,20 @@ public class ConceptClique extends Neo4jAbstractIdentifiedEntity {
 		
 		int cid = conceptIds.indexOf(conceptId);
 		addToSubClique(beaconId,cid);
+	}
+
+	public void removeConceptId(String beaconId, String conceptId) {
+		
+		if( nullOrEmpty(beaconId) ) 
+			throw new DomainModelException("ConceptClique() ERROR: null or empty beacon id?");
+		
+		int cid = conceptIds.indexOf(conceptId);
+		
+		if(cid>=0) {
+			conceptIds.set(cid, ""); // empty string safer than null!
+		}
+		
+		removeFromSubClique(beaconId,cid);
 	}
 	
 	/*
@@ -168,7 +216,13 @@ public class ConceptClique extends Neo4jAbstractIdentifiedEntity {
 		if(! subclique.contains(cid) ) subclique.add(cid);
 		setBeaconSubClique(beaconId,subclique);
 	}
-	
+
+	private void removeFromSubClique(String beaconId, int cid) {
+		List<Integer> subclique = getBeaconSubClique(beaconId) ;
+		if( subclique.contains(cid) ) subclique.remove(cid);
+		setBeaconSubClique(beaconId,subclique);
+	}
+
 	/*
 	 * Private accessor to internal beacon subclique data structure, which expands as needed by beacons provided
 	 */
@@ -328,5 +382,6 @@ public class ConceptClique extends Neo4jAbstractIdentifiedEntity {
 	public List<String> getBeaconSubcliques() {
 		return new ArrayList<String>(beaconSubcliques);
 	}
+
 
 }

@@ -1,9 +1,0 @@
-Some Beacon and Server classes have an impedence mismatch of methods relating to 'semanticGroup' properties.
-The ISemanticGroup adds these methods using the Java 8 'default' directive in the interface, along with 
-abstract declarations of the corresponding 'type' setter/getter methods.
-
-Note that Code Generation likely deletes the interface association of 'implements ISemanticGroup' so this needs to be
-patched in each time (at least, until which day that the Beacon API is harmonized with the Beacon Aggregator API)
-
-This seems to be the least intrusive way to fix the problem but unfortunately, this has the side effect of
-exposing the 'semanticGroup' attribute in the corresponding output JSON (which TKBIO and other clients can simply ignore?)

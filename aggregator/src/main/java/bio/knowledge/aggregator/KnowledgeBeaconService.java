@@ -624,12 +624,12 @@ public class KnowledgeBeaconService {
 						
 						if(clique.hasConceptIds(beaconId)) {
 							/*
-							 * Safer for now to take all the known concept identifiers here  
 							 * TODO: try to figure out why the beacon-specific concept list
 							 * - e.g. from Garbanzo - doesn't always retrieve results?
 							 */
-							conceptIds = clique.getConceptIds();
+							conceptIds = clique.getConceptIds(beaconId);
 							_logger.debug("Calling getConceptDetails() with concept details '"+String.join(",",conceptIds)+"'");
+							
 						} else { //.. don't look any further if the list is empty...
 							_logger.debug("Returning from getConceptDetails() ... no concept ids available?");
 							return new ArrayList<BeaconConceptWithDetails>();
@@ -657,7 +657,6 @@ public class KnowledgeBeaconService {
 								
 								List<BeaconConceptWithDetails> conceptWithDetails = 
 																	conceptsApi.getConceptDetails( id );
-								
 								results.addAll(conceptWithDetails);
 								
 							} catch (Exception e) {

@@ -32,6 +32,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -47,6 +49,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import bio.knowledge.Util;
 import bio.knowledge.aggregator.ConceptCliqueService;
 import bio.knowledge.aggregator.ConceptTypeService;
 import bio.knowledge.aggregator.ConceptTypeUtil;
@@ -67,6 +70,7 @@ import bio.knowledge.server.model.ServerAnnotation;
 import bio.knowledge.server.model.ServerCliqueIdentifier;
 import bio.knowledge.server.model.ServerConcept;
 import bio.knowledge.server.model.ServerConceptBeaconEntry;
+import bio.knowledge.server.model.ServerConceptDetail;
 import bio.knowledge.server.model.ServerConceptWithDetails;
 import bio.knowledge.server.model.ServerKnowledgeBeacon;
 import bio.knowledge.server.model.ServerLogEntry;
@@ -76,7 +80,7 @@ import bio.knowledge.server.model.ServerStatementSubject;
 import bio.knowledge.server.model.ServerSummary;
 
 @Service
-public class ControllerImpl implements ConceptTypeUtil {
+public class ControllerImpl implements Util, ConceptTypeUtil {
 
 	private static Logger _logger = LoggerFactory.getLogger(ControllerImpl.class);
 
@@ -223,10 +227,21 @@ public class ControllerImpl implements ConceptTypeUtil {
 										beacon,
 										response.getId(),
 										translation.getName(),
-										types
+										types,
+										translation.getTaxon()
 									);
 					
+					String taxon = translation.getTaxon();
+					if(taxon==null) {
+						/*
+						 * If the beacon doesn't know for sure
+						 * then ask the clique about their taxon
+						 */
+						translation.setTaxon(ecc.getTaxon());
+					}
+					
 					String cliqueId = ecc.getId();
+					
 					if(!responses.containsKey(cliqueId)) {
 						
 						translation.setClique(cliqueId);
@@ -278,6 +293,25 @@ public class ControllerImpl implements ConceptTypeUtil {
 			return ResponseEntity.ok(new ArrayList<>());
 		}
 	}
+	
+	static final Set TaxonTags = new HashSet<String>(); 
+	static {
+		TaxonTags.add("taxon");   // Biolink?
+		TaxonTags.add("wd:p703"); // from Wikidata
+	}
+	
+	private String findTaxon(List<ServerConceptDetail> details) {
+		Optional<ServerConceptDetail> taxonOpt = 
+				details.
+					stream().
+						filter( d -> TaxonTags.contains(d.getTag().toLowerCase()) ).
+							findFirst();
+		if(taxonOpt.isPresent()) {
+			ServerConceptDetail taxon = taxonOpt.get();
+			return taxon.getValue();
+		}
+		return "";
+	}
 
 	public ResponseEntity<ServerConceptWithDetails> getConceptDetails(
 			String cliqueId, 
@@ -322,6 +356,7 @@ public class ControllerImpl implements ConceptTypeUtil {
 			 */
 			conceptDetails.setType(ecc.getConceptType());
 			conceptDetails.setAliases(ecc.getConceptIds());
+			conceptDetails.setTaxon(ecc.getTaxon());
 			
 			List<ServerConceptBeaconEntry> entries = conceptDetails.getEntries();
 			
@@ -339,6 +374,56 @@ public class ControllerImpl implements ConceptTypeUtil {
 					
 					ServerConceptBeaconEntry entry = Translator.translate(response);
 					entry.setBeacon(beacon.getId());
+					
+					/*
+					 * Heuristic to set and/or dynamically 
+					 * repair the clique taxon assignment taxon
+					 */
+					String cliqueTaxon = conceptDetails.getTaxon();
+					// Scrounge among the entry details
+					String reportedTaxon = findTaxon(entry.getDetails());
+					
+					if(cliqueTaxon.isEmpty()) {
+						
+						if(!reportedTaxon.isEmpty()) {
+							conceptDetails.setTaxon(reportedTaxon);
+							
+							// Opportunistically update the clique taxon along the way?
+							ecc.setTaxon(reportedTaxon);
+							ecc = exactMatchesHandler.updateAndRefresh(ecc);
+						}
+					} else if(!reportedTaxon.equals(cliqueTaxon)) {
+						conceptDetails.setTaxon(reportedTaxon);
+						/*
+						 * Oops! This concept clique needs to be 
+						 * split along interspecific lines!
+						 * It is hard to say what the correct
+						 * course of action is at this point,
+						 * but after splitting the clique,
+						 * we ignore the entry that had the
+						 * different taxon (as being from the
+						 * wrong species). This decision may 
+						 * backfire occasionally if the user
+						 * was really interested in the
+						 * given identifier...
+						 */
+						ConceptClique[] cliquePair = 
+								exactMatchesHandler.splitClique( 
+										ecc, 
+										beacon.getId(), 
+										response.getId(), 
+										reportedTaxon 
+								);
+						
+						// Update the clique of the record to be returned(?)
+						ecc = cliquePair[0];
+						conceptDetails.setClique(ecc.getId());
+						conceptDetails.setAliases(ecc.getConceptIds());
+						
+						continue;
+					}
+					
+					// If you made it this far, capture the entry..
 					entries.add(entry);
 				}
 			}
@@ -492,7 +577,8 @@ public class ControllerImpl implements ConceptTypeUtil {
 													beacon,
 													subjectId,
 													subjectName,
-													subjectTypes
+													subjectTypes,
+													"" // don't currently expect the statements to return taxonomic info?
 												);
 					
 					bio.knowledge.server.model.ServerStatementObject object = translation.getObject();
@@ -515,7 +601,8 @@ public class ControllerImpl implements ConceptTypeUtil {
 													beacon,
 													objectId,
 													objectName,
-													objectTypes
+													objectTypes,
+													"" // don't currently expect the statements to return taxonomic info?
 												);
 					
 					/*
@@ -542,7 +629,7 @@ public class ControllerImpl implements ConceptTypeUtil {
 						 * setting their statement subject semantic groups?
 						 */
 						String ssg = subject.getType();
-						if( ( ssg==null || ssg.isEmpty() || ssg.equals(Category.DEFAULT_SEMANTIC_GROUP)) && sourceClique != null )
+						if( ( nullOrEmpty(ssg) || ssg.equals(Category.DEFAULT_SEMANTIC_GROUP)) && sourceClique != null )
 							subject.setType(sourceClique.getConceptType());
 						
 						object.setClique(objectEcc.getId());
@@ -551,7 +638,7 @@ public class ControllerImpl implements ConceptTypeUtil {
 						 * setting their statement object semantic groups?
 						 */
 						String osg = object.getType();
-						if( ( osg==null || osg.isEmpty() || osg.equals(Category.DEFAULT_SEMANTIC_GROUP)) && objectEcc != null )
+						if( ( nullOrEmpty(osg) || osg.equals(Category.DEFAULT_SEMANTIC_GROUP)) && objectEcc != null )
 							object.setType(objectEcc.getConceptType());
 						
 					} else if( matchToList( objectId, objectName, conceptIds ) ) {
@@ -562,8 +649,7 @@ public class ControllerImpl implements ConceptTypeUtil {
 						 * setting their statement object semantic groups?
 						 */
 						String objectConceptType = object.getType();
-						if( ( objectConceptType==null ||
-							  objectConceptType.isEmpty() || 
+						if( (nullOrEmpty( objectConceptType) || 
 							  objectConceptType.equals(Category.DEFAULT_SEMANTIC_GROUP)) && sourceClique != null
 						)
 							object.setType(sourceClique.getConceptType());
@@ -574,9 +660,8 @@ public class ControllerImpl implements ConceptTypeUtil {
 						 * setting their statement subject semantic groups?
 						 */
 						String subjectConceptType = subject.getType();
-						if( ( subjectConceptType==null || 
-							  subjectConceptType.isEmpty() || 
-							  subjectConceptType.equals(Category.DEFAULT_SEMANTIC_GROUP)) && subjectEcc != null 
+						if( ( nullOrEmpty(subjectConceptType) || 
+							  subjectConceptType.equals(Category.DEFAULT_SEMANTIC_GROUP) ) && subjectEcc != null 
 						)
 							object.setType(subjectEcc.getConceptType());	
 						

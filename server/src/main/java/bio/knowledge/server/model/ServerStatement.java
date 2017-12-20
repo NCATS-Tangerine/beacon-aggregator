@@ -1,14 +1,10 @@
 package bio.knowledge.server.model;
 
 import java.util.Objects;
-import bio.knowledge.server.model.ServerStatementObject;
-import bio.knowledge.server.model.ServerStatementPredicate;
-import bio.knowledge.server.model.ServerStatementSubject;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonCreator;
-import io.swagger.annotations.ApiModel;
+
 import io.swagger.annotations.ApiModelProperty;
-import javax.validation.constraints.*;
 /**
  * ServerStatement
  */
