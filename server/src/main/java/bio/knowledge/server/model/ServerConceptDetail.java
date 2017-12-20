@@ -12,7 +12,7 @@ import io.swagger.annotations.ApiModelProperty;
 @ApiModel(description = "Additional attributes associated with a concept ")
 @javax.annotation.Generated(value = "io.swagger.codegen.languages.SpringCodegen", date = "2017-12-19T18:00:36.924-08:00")
 
-public class ServerConceptDetail   {
+public class ServerConceptDetail {
   @JsonProperty("tag")
   private String tag = null;
 

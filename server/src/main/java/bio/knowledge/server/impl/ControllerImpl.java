@@ -33,7 +33,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -56,6 +55,7 @@ import bio.knowledge.aggregator.ConceptTypeUtil;
 import bio.knowledge.aggregator.KnowledgeBeaconImpl;
 import bio.knowledge.aggregator.KnowledgeBeaconRegistry;
 import bio.knowledge.aggregator.KnowledgeBeaconService;
+import bio.knowledge.aggregator.TaxonomicService;
 import bio.knowledge.client.model.BeaconAnnotation;
 import bio.knowledge.client.model.BeaconConcept;
 import bio.knowledge.client.model.BeaconConceptWithDetails;
@@ -294,21 +294,17 @@ public class ControllerImpl implements Util, ConceptTypeUtil {
 		}
 	}
 	
-	static final Set TaxonTags = new HashSet<String>(); 
-	static {
-		TaxonTags.add("taxon");   // Biolink?
-		TaxonTags.add("wd:p703"); // from Wikidata
-	}
-	
-	private String findTaxon(List<ServerConceptDetail> details) {
+	public static String findTaxonInDetails(List<ServerConceptDetail> details) {
+		
 		Optional<ServerConceptDetail> taxonOpt = 
 				details.
 					stream().
-						filter( d -> TaxonTags.contains(d.getTag().toLowerCase()) ).
+						filter( d -> TaxonomicService.containTaxonTag(d.getTag().toLowerCase()) ).
 							findFirst();
+		
 		if(taxonOpt.isPresent()) {
 			ServerConceptDetail taxon = taxonOpt.get();
-			return taxon.getValue();
+			return TaxonomicService.lookUpByIdentifier(taxon.getValue());
 		}
 		return "";
 	}
@@ -381,7 +377,7 @@ public class ControllerImpl implements Util, ConceptTypeUtil {
 					 */
 					String cliqueTaxon = conceptDetails.getTaxon();
 					// Scrounge among the entry details
-					String reportedTaxon = findTaxon(entry.getDetails());
+					String reportedTaxon = findTaxonInDetails(entry.getDetails());
 					
 					if(cliqueTaxon.isEmpty()) {
 						

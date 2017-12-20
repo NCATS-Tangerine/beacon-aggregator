@@ -219,7 +219,9 @@ public class ConceptClique extends Neo4jAbstractIdentifiedEntity implements Util
 
 	private void removeFromSubClique(String beaconId, int cid) {
 		List<Integer> subclique = getBeaconSubClique(beaconId) ;
-		if( subclique.contains(cid) ) subclique.remove(cid);
+		Integer cintId = new Integer(cid);
+		if( subclique.contains(cintId) ) 
+			subclique.remove(cintId);
 		setBeaconSubClique(beaconId,subclique);
 	}
 
