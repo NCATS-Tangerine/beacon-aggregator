@@ -53,17 +53,27 @@ public class PredicatesController implements PredicatesApiDelegate {
     @Override
     public ResponseEntity<Map<String, Map<String, List<String>>>> getPredicates() {
 
-        try {
+        if (getObjectMapper().isPresent() && getAcceptHeader().isPresent()) {
 
-            Map<String, Map<String,List<String>>> predicate_map = metadataService.getPredicates();
+            if (getAcceptHeader().get().contains("application/json")) {
 
-            return new ResponseEntity<>(predicate_map, HttpStatus.OK);
+                try {
 
-        } catch (BlackboardException bbe) {
-            kbaLog.logError("global", bbe);
-            return ResponseEntity.badRequest().build();
+                    Map<String, Map<String, List<String>>> predicate_map = metadataService.getPredicates();
+
+                    return new ResponseEntity<>(predicate_map, HttpStatus.OK);
+
+                } catch (BlackboardException bbe) {
+
+                    kbaLog.logError("global", bbe);
+                    return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+                }
+            }
+
+        } else {
+            log.warn("ObjectMapper or HttpServletRequest not configured so no result can be generated");
         }
 
+        return new ResponseEntity<>(HttpStatus.NOT_IMPLEMENTED);
     }
-
 }

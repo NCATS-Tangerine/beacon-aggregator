@@ -37,7 +37,8 @@ public interface QueryApi {
         produces = { "application/json" }, 
         consumes = { "application/json" },
         method = RequestMethod.POST)
-    default ResponseEntity<Message> query(@ApiParam(value = "Query information to be submitted" ,required=true )  @Valid @RequestBody Map<String, Object> body) {
+    default ResponseEntity<Message> query(
+            @ApiParam(value = "Query information to be submitted" ,required=true )  @Valid @RequestBody Map<String, Object> body) {
         return getDelegate().query(body);
     }
 

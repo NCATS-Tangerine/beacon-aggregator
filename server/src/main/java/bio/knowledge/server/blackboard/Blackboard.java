@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import bio.knowledge.server.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -52,20 +53,6 @@ import bio.knowledge.model.neo4j.Neo4jEvidence;
 import bio.knowledge.model.neo4j.Neo4jStatement;
 import bio.knowledge.ontology.BiolinkTerm;
 import bio.knowledge.server.controller.ExactMatchesHandler;
-import bio.knowledge.server.model.ServerCliqueIdentifier;
-import bio.knowledge.server.model.ServerCliquesQuery;
-import bio.knowledge.server.model.ServerCliquesQueryResult;
-import bio.knowledge.server.model.ServerCliquesQueryStatus;
-import bio.knowledge.server.model.ServerConceptDetail;
-import bio.knowledge.server.model.ServerConceptWithDetails;
-import bio.knowledge.server.model.ServerConceptWithDetailsBeaconEntry;
-import bio.knowledge.server.model.ServerConceptsQuery;
-import bio.knowledge.server.model.ServerConceptsQueryResult;
-import bio.knowledge.server.model.ServerConceptsQueryStatus;
-import bio.knowledge.server.model.ServerStatementDetails;
-import bio.knowledge.server.model.ServerStatementsQuery;
-import bio.knowledge.server.model.ServerStatementsQueryResult;
-import bio.knowledge.server.model.ServerStatementsQueryStatus;
 
 /**
  * This class manages the KBA Blackboard which is, in essence, 
@@ -539,7 +526,6 @@ public class Blackboard implements Curie, QueryUtil, Util {
 		}
 	}
 
-	
 /******************************** Statement Details Data Access *************************************/
 
 	public ServerStatementDetails getStatementDetails(String statementId, List<String> keywords,
@@ -579,6 +565,13 @@ public class Blackboard implements Curie, QueryUtil, Util {
 		return result;
 	}
 
-	
-	
+	/******************************** NCATS Reasoner API Query Handler ****************************/
+
+	/**
+	 *
+	 * @return Reasoner API message
+	 */
+    public Message query(Map<String, Object> body) throws BlackboardException {
+    	throw new BlackboardException("UNIMPLEMENTED: Reasoner API Query");
+    }
 }
