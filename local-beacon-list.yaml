@@ -28,7 +28,7 @@ beacons:
     contact: Lance Hannestad
     status: deployed
   - url: https://kba.ncats.io/beacon/smpdb
-    name: Rhea
+    name: Small Molecular Pathway Database
     description: the annotated database of small molecular pathways
     wraps: https://smpdb.ca/
     repo: https://github.com/NCATS-Tangerine/smpdb-beacon
