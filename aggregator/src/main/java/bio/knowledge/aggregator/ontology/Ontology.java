@@ -1,42 +1,32 @@
 package bio.knowledge.aggregator.ontology;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.Function;
-
-import javax.annotation.PostConstruct;
-
+import bio.knowledge.aggregator.KnowledgeBeaconImpl;
+import bio.knowledge.aggregator.KnowledgeBeaconRegistry;
+import bio.knowledge.ontology.BiolinkClass;
+import bio.knowledge.ontology.BiolinkEntity;
+import bio.knowledge.ontology.BiolinkSlot;
+import bio.knowledge.ontology.mapping.ModelLookup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import bio.knowledge.aggregator.KnowledgeBeaconImpl;
-import bio.knowledge.aggregator.KnowledgeBeaconRegistry;
-
-import bio.knowledge.ontology.BeaconBiolinkModel;
-import bio.knowledge.ontology.BiolinkClass;
-import bio.knowledge.ontology.BiolinkEntityInterface;
-import bio.knowledge.ontology.BiolinkSlot;
-import bio.knowledge.ontology.BiolinkTerm;
-import bio.knowledge.ontology.mapping.InheritanceLookup;
-import bio.knowledge.ontology.mapping.ModelLookup;
-import bio.knowledge.ontology.mapping.NameSpace;
-import bio.knowledge.ontology.utils.Utils;
+import java.util.Optional;
+import java.util.function.Function;
 
 @Component
 public class Ontology extends bio.knowledge.ontology.Ontology {
 	
-	private static Logger _logger = LoggerFactory.getLogger(Ontology.class);
+	private static final Logger _logger = LoggerFactory.getLogger(Ontology.class);
 	
 	@Autowired KnowledgeBeaconRegistry registry;
 	
 	/**
-	 * 
-	 * @param beaconId
-	 * @param category
-	 * @return
+	 * Returns an Optional wrapped Biolink class for a given Beacon (by id) and Biolink category.
+	 *
+	 * @param beaconId identifier of a beacon
+	 * @param category from Biolink
+	 * @return Optional<BiolinkClass>
 	 */
 	@SuppressWarnings("unchecked")
 	public Optional<BiolinkClass> lookUpCategoryByBeacon(
@@ -46,41 +36,51 @@ public class Ontology extends bio.knowledge.ontology.Ontology {
 		return (Optional<BiolinkClass>)lookUpByBeacon(beaconId,category,getClassLookup());
 	}
 
-	/**
-	 * 
-	 * @param beaconId
-	 * @param category
-	 * @return
-	 */
+	/* *
+	 *
+	 *  UNUSED FUNCTION?
+	 *
+	 * Returns an Optional wrapped Biolink slot
+	 * for a given Beacon (by id) and Biolink predicate.
+	 *
+	 * @param beaconId identifier of a beacon
+	 * @param predicate from Biolink
+	 * @return Optional<BiolinkSlot>
+	 * /
 	@SuppressWarnings("unchecked")
 	public Optional<BiolinkSlot> lookUpPredicateByBeacon(
-			Integer beaconId, 
+			Integer beaconId,
 			String predicate
 	) {
 		return (Optional<BiolinkSlot>)lookUpByBeacon(beaconId,predicate,getSlotLookup());
 	}
-	
+	*/
+
 	/**
-	 * 
-	 * @param beaconId
-	 * @param termId
-	 * @return
+	 * Returns an Optional wrapped Biolink Entity (class or slot)
+	 * for a given Beacon (by id) and CURIE of an mapped ontology
+	 *
+	 * @param beaconId identifier of a beacon
+	 * @param termId CURIE of an mapped ontology
+	 * @return Optional<? extends BiolinkEntity>
 	 */
-	public Optional<? extends BiolinkEntityInterface> lookUpByBeacon(
+	public Optional<? extends BiolinkEntity> lookUpByBeacon(
 			Integer beaconId, 
 			String termId,  
-			ModelLookup<? extends BiolinkEntityInterface> modelLookup
+			ModelLookup modelLookup
 	) {
 		KnowledgeBeaconImpl beacon = registry.getBeaconById(beaconId);
 		return getMapping( beacon.getUrl(), termId, modelLookup );
 	}
 	
 	/**
-	 * 
-	 * @param beaconId
-	 * @param id
-	 * @param category
-	 * @return
+	 * Returns the Biolink class object for category, from
+	 * a given Beacon (by id), for a given id and/or category name.
+	 *
+	 * @param beaconId identifier of a beacon
+	 * @param id of the category
+	 * @param category from Biolink
+	 * @return BiolinkClass of a concept category
 	 */
 	public BiolinkClass lookupCategory( Integer beaconId, String id, String category ) {
 		
@@ -90,7 +90,7 @@ public class Ontology extends bio.knowledge.ontology.Ontology {
 						id, 
 						category,
 						getClassLookup(),
-						(String s)-> getClassByName(s) 
+						this::getClassByName
 		) ;
 		
 		if(biolinkClass==null) {
@@ -109,11 +109,13 @@ public class Ontology extends bio.knowledge.ontology.Ontology {
 	}
 	
 	/**
-	 * 
-	 * @param beaconId
-	 * @param id
-	 * @param predicate
-	 * @return
+	 * Returns the Biolink slot object for predicate, from
+	 * a given Beacon (by id), for a given id and/or predicate name.
+	 *
+	 * @param beaconId identifier of a beacon
+	 * @param id of the category
+	 * @param predicate from Biolink
+	 * @return BiolinkSlot of a predicate slot
 	 */
 	public BiolinkSlot lookupPredicate( Integer beaconId, String id, String predicate ) {
 		
@@ -123,7 +125,7 @@ public class Ontology extends bio.knowledge.ontology.Ontology {
 						id, 
 						predicate,
 						getSlotLookup(),
-						(String s)-> getSlotByName(s) 
+						this::getSlotByName
 		) ;
 		
 		if( biolinkSlot == null) {
@@ -144,19 +146,19 @@ public class Ontology extends bio.knowledge.ontology.Ontology {
 	}
 	
 	/*
-	 * Common code for two Biolink Model ontology lookups above
+	 * Shared code for two Biolink Model ontology lookups above
 	 */
-	private BiolinkEntityInterface lookupTerm(
+	private BiolinkEntity lookupTerm(
 			Integer beaconId,
 			String id,
 			String term,  
-			ModelLookup<? extends BiolinkEntityInterface> modelLookup,
-			Function<String,Optional<? extends BiolinkEntityInterface>> lookupByName
+			ModelLookup modelLookup,
+			Function<String,Optional<? extends BiolinkEntity>> lookupByName
 	) {
 		
-		BiolinkEntityInterface biolinkTerm = null;
+		BiolinkEntity biolinkTerm = null;
 		
-		Optional<? extends BiolinkEntityInterface> optionalBiolinkTerm = lookupByName.apply( term );
+		Optional<? extends BiolinkEntity> optionalBiolinkTerm = lookupByName.apply( term );
 		
 		if( ! optionalBiolinkTerm.isPresent()) {
 			optionalBiolinkTerm = lookUpByBeacon( beaconId, id, modelLookup );
