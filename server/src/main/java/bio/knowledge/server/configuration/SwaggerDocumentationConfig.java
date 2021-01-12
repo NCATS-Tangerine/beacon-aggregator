@@ -23,7 +23,7 @@ public class SwaggerDocumentationConfig {
             .licenseUrl("http://www.apache.org/licenses/LICENSE-2.0.html")
             .termsOfServiceUrl("https://ncats.nih.gov/translator")
             .version("1.0.14")
-            .contact(new Contact("Richard Bruskiewich","http://www.starinformatics.com", "richard@starinformatics.com"))
+            .contact(new Contact("NCATS Translator","https://ncats.nih.gov/translator", "richard@starinformatics.com"))
             .build();
     }
 
